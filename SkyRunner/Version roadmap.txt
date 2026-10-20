@@ -1,0 +1,12 @@
+SkyRunner version rundown
+
+0.2	Poll working, next step: check in-main menu/in-cockpit
+0.3	Check in-cockpit -> if true: generate jobs from the current origin
+	0.31	Jobs come from haversine function within 50-500nm (user-adjustable).
+0.4	Job accepted -> wait for user to leave form then go silent -> upon form reactivation -> expect user to click 'job done'
+0.5	Upon user click 'job done' -> check if location/state is destination/parked, only then mark job done. destination becomes the next origin.
+0.6	History feature for done jobs (pay special attention to destinations in done jobs...)
+0.7	Upon generating a subsequent job (from 2nd job on only...) never repeat one of the previous 5 or 6 origins as new destinations.
+0.8	Job generation overhaul: 3 modes: adventurer (never repeat last 5 destinations), round-trip mode (after a 'frist' job is done, only 'second' job available is right back to the same airport, then a new destination can be available), poligon mode ('circle' around 5 or 6 airports close by.
+0.9	Jobs differ from aircraft to aircraft, in payload and distance.
+1	Bugs ironed out, icon set, tooltips all around set, etc...

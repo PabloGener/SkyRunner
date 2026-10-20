@@ -1,100 +1,184 @@
-﻿using System;
+﻿///////////////////////////////////////////////////////////////////////////////
+// SimConnect integration patterns (per-primitive registration, SimVarString
+// wrapper, and message-handler pump) adapted from:
+//
+//   SimConnectHelper
+//   https://github.com/Dragonlaird/SimConnectHelper
+//   by Dragonlaird (MIT License)
+//
+// The original library is a static helper for MSFS 2020 SimConnect.
+// We borrowed the technique — not the library — to keep SkyRunner's
+// SimConnect layer small and dependency-free.
+///////////////////////////////////////////////////////////////////////////////
+///
+using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.FlightSimulator.SimConnect;
 
 namespace SkyRunner
 {
-
-
-
-    ///////////////////////////////////////////////////////////////
-    /// Beginning of frmMain
-    ///////////////////////////////////////////////////////////////
     public partial class frmMain : Form
     {
-
-        ///////////////////////////////////////////////////////////////
-        /// SimConnect structure for aircraft data. This structure is used to receive data from the flight simulator.
-        ///////////////////////////////////////////////////////////////
         [System.Runtime.InteropServices.StructLayout(
-        System.Runtime.InteropServices.LayoutKind.Sequential,
-        CharSet = System.Runtime.InteropServices.CharSet.Ansi, Pack = 1)]
-        public struct AircraftData
+            System.Runtime.InteropServices.LayoutKind.Sequential,
+            CharSet = System.Runtime.InteropServices.CharSet.Ansi, Pack = 1)]
+        public struct SimVarString
         {
-            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 256)]
-            public string Title;
-            public double Latitude;
-            public double Longitude;
-            public int OnGround;
-            public int ParkingState;
+            [System.Runtime.InteropServices.MarshalAs(
+                System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 256)]
+            public string Value;
         }
 
         private Microsoft.FlightSimulator.SimConnect.SimConnect _sim;
-        private bool _simConnected;
-        enum DEFINITIONS { Aircraft }
-        enum REQUESTS { Aircraft }
+        private MessageHandler _msgHandler;
 
-        private void Sim_OnRecvOpen(
-            Microsoft.FlightSimulator.SimConnect.SimConnect sender,
-            Microsoft.FlightSimulator.SimConnect.SIMCONNECT_RECV_OPEN data) {
-                _sim.AddToDataDefinition(DEFINITIONS.Aircraft, "TITLE", null,
-                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATATYPE.STRING256, 0, 0);
-                _sim.AddToDataDefinition(DEFINITIONS.Aircraft, "PLANE LATITUDE", "degrees",
-                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATATYPE.FLOAT64, 0, 0);
-                _sim.AddToDataDefinition(DEFINITIONS.Aircraft, "PLANE LONGITUDE", "degrees",
-                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATATYPE.FLOAT64, 0, 0);
-                _sim.AddToDataDefinition(DEFINITIONS.Aircraft, "SIM ON GROUND", "Bool",
-                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATATYPE.INT32, 0, 0);
-                _sim.AddToDataDefinition(DEFINITIONS.Aircraft, "PLANE IN PARKING STATE", "Bool",
-                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATATYPE.INT32, 0, 0);
+        private const int WM_USER_SIMCONNECT = 0x0402;
 
-                _sim.RegisterDataDefineStruct<AircraftData>(DEFINITIONS.Aircraft);
+        private enum DEFINITIONS { Title = 1, Lat = 2, Lon = 3, Ground = 4, Parked = 5, Speed = 6 }
+        private enum REQUESTS { Title = 1, Lat = 2, Lon = 3, Ground = 4, Parked = 5, Speed = 6 }
 
-                _sim.RequestDataOnSimObject(
-                    REQUESTS.Aircraft, DEFINITIONS.Aircraft,
-                    SimConnect.SIMCONNECT_OBJECT_ID_USER,
-                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_PERIOD.ONCE,
-                    0, 0, 0, 0);
+        private string _acTitle;
+        private double _acLat, _acLon;
+        private int _acGround, _acParked;
+        private bool _gotTitle, _gotLat, _gotLon, _gotGround, _gotParked;
+        private double _acAirspeed;
+        private bool _gotSpeed;
+
+        private readonly string _jsonPath;
+        private List<Airport> _airports;
+
+        public frmMain(string jsonPath) {
+            InitializeComponent();
+            _jsonPath = jsonPath;
         }
 
-        private void Sim_OnRecvSimobjectData(
-        Microsoft.FlightSimulator.SimConnect.SimConnect sender,
-        Microsoft.FlightSimulator.SimConnect.SIMCONNECT_RECV_SIMOBJECT_DATA data) {
-                if ((REQUESTS)data.dwRequestID != REQUESTS.Aircraft) return;
+        private void frmMain_Load(object sender, EventArgs e) {
+            _airports = JsonSerializer.Deserialize<List<Airport>>(File.ReadAllText(_jsonPath));
+            Console.WriteLine($"Loaded {_airports.Count} airports. First: Icao='{_airports[0].icao}' Name='{_airports[0].name}' Lat={_airports[0].latitude} Lon={_airports[0].longitude}");
 
-                var ac = (AircraftData)data.dwData[0];
-
-                if (ac.OnGround == 0) {
-                    MessageBox.Show("Aircraft is airborne. Land first.",
-                        "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    CleanupSim();
-                    return;
+            _msgHandler = new MessageHandler();
+            _msgHandler.CreateControl();
+            _msgHandler.MessageReceived += (s, m) =>
+            {
+                if (m.Msg == WM_USER_SIMCONNECT && _sim != null) {
+                    try { _sim.ReceiveMessage(); } catch { }
                 }
+            };
+        }
 
-                if (ac.ParkingState == 0) {
-                    MessageBox.Show("Aircraft is on the ground but not parked. Park first.",
-                        "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    CleanupSim();
-                    return;
-                }
+        private void cmdConnect_Click(object sender, EventArgs e) {
+            cmdConnect.Enabled = false;
 
-                // On ground + parked → nearest airport
-                // (next segment: loop _airports with Haversine, show the match)
+            try {
+                _sim = new SimConnect("SkyRunner", _msgHandler.Handle,
+                    WM_USER_SIMCONNECT, null, 0);
 
+                _sim.OnRecvOpen += Sim_OnRecvOpen;
+                _sim.OnRecvQuit += Sim_OnRecvQuit;
+                _sim.OnRecvException += Sim_OnRecvException;
+                _sim.OnRecvSimobjectData += Sim_OnRecvSimobjectData;
+            }
+            catch (Exception ex) {
+                cmdConnect.Enabled = true;
+                MessageBox.Show("Could not connect to MSFS. Is it running?\n\n" + ex.Message,
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void Sim_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data) {
+            _gotTitle = _gotLat = _gotLon = _gotGround = _gotParked = _gotSpeed = false;
+
+            _sim.AddToDataDefinition(DEFINITIONS.Title, "TITLE", "number",
+                SIMCONNECT_DATATYPE.STRING256, 0, 0);
+            _sim.RegisterDataDefineStruct<SimVarString>(DEFINITIONS.Title);
+
+            _sim.AddToDataDefinition(DEFINITIONS.Lat, "PLANE LATITUDE", "degrees",
+                SIMCONNECT_DATATYPE.FLOAT64, 0, 0);
+            _sim.RegisterDataDefineStruct<double>(DEFINITIONS.Lat);
+
+            _sim.AddToDataDefinition(DEFINITIONS.Lon, "PLANE LONGITUDE", "degrees",
+                SIMCONNECT_DATATYPE.FLOAT64, 0, 0);
+            _sim.RegisterDataDefineStruct<double>(DEFINITIONS.Lon);
+
+            _sim.AddToDataDefinition(DEFINITIONS.Ground, "SIM ON GROUND", "Bool",
+                SIMCONNECT_DATATYPE.INT32, 0, 0);
+            _sim.RegisterDataDefineStruct<int>(DEFINITIONS.Ground);
+
+            _sim.AddToDataDefinition(DEFINITIONS.Parked, "PLANE IN PARKING STATE", "Bool",
+                SIMCONNECT_DATATYPE.INT32, 0, 0);
+            _sim.RegisterDataDefineStruct<int>(DEFINITIONS.Parked);
+
+            _sim.AddToDataDefinition(DEFINITIONS.Speed, "AIRSPEED INDICATED", "knots",
+                SIMCONNECT_DATATYPE.FLOAT64, 0, 0);
+            _sim.RegisterDataDefineStruct<double>(DEFINITIONS.Speed);
+            
+            _sim.RequestDataOnSimObject(REQUESTS.Title, DEFINITIONS.Title, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+            _sim.RequestDataOnSimObject(REQUESTS.Lat, DEFINITIONS.Lat, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+            _sim.RequestDataOnSimObject(REQUESTS.Lon, DEFINITIONS.Lon, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+            _sim.RequestDataOnSimObject(REQUESTS.Ground, DEFINITIONS.Ground, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+            _sim.RequestDataOnSimObject(REQUESTS.Parked, DEFINITIONS.Parked, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+            _sim.RequestDataOnSimObject(REQUESTS.Speed, DEFINITIONS.Speed, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+
+        }
+
+        private void Sim_OnRecvSimobjectData(SimConnect sender, SIMCONNECT_RECV_SIMOBJECT_DATA data) {
+            switch ((REQUESTS)data.dwRequestID) {
+                case REQUESTS.Title: _acTitle = ((SimVarString)data.dwData[0]).Value; _gotTitle = true; break;
+                case REQUESTS.Lat: _acLat = (double)data.dwData[0]; _gotLat = true; break;
+                case REQUESTS.Lon: _acLon = (double)data.dwData[0]; _gotLon = true; break;
+                case REQUESTS.Ground: _acGround = (int)data.dwData[0]; _gotGround = true; break;
+                case REQUESTS.Parked: _acParked = (int)data.dwData[0]; _gotParked = true; break;
+                case REQUESTS.Speed: _acAirspeed = (double)data.dwData[0]; _gotSpeed = true; break;
+                default: return;
+            }
+
+            if (!(_gotTitle && _gotLat && _gotLon && _gotGround && _gotParked && _gotSpeed))
+                return;
+
+            if (_acGround == 0) {
+                MessageBox.Show("Aircraft is airborne. Land first.",
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 CleanupSim();
+                return;
+            }
+
+            if (_acAirspeed >= 1.0) {
+                MessageBox.Show("Aircraft is on the ground but still moving. Come to a full stop and try again.",
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                CleanupSim();
+                return;
+            }
+
+            Airport nearestAirport = _airports
+                .OrderBy(a => DistanceInKilometers(_acLat, _acLon, a.latitude, a.longitude))
+                .FirstOrDefault();
+
+            if (nearestAirport != null) {
+                Console.WriteLine($"airport count={_airports.Count}, first icao='{_airports[0].icao}', name='{_airports[0].name}'");
+                txtCurrentAirport.Text = $"[{nearestAirport.icao}] - {nearestAirport.name}";
+            }
+
+            CleanupSim();
+        }
+
+        private static double DistanceInKilometers(
+            double lat1, double lon1, double lat2, double lon2) {
+            const double R = 6371.0;
+            double dLat = (lat2 - lat1) * Math.PI / 180.0;
+            double dLon = (lon2 - lon1) * Math.PI / 180.0;
+            double rLat1 = lat1 * Math.PI / 180.0;
+            double rLat2 = lat2 * Math.PI / 180.0;
+            double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                     + Math.Cos(rLat1) * Math.Cos(rLat2)
+                     * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         }
 
         private void Sim_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data) {
-            // Sim closed / connection dropped
             CleanupSim();
         }
 
@@ -108,50 +192,6 @@ namespace SkyRunner
             try { _sim?.Dispose(); } catch { }
             _sim = null;
             cmdConnect.Enabled = true;
-            tmrPoll.Enabled = false;
-        }
-
-
-
-
-
-
-        private readonly string _jsonPath;
-        private List<Airport> _airports;
-
-        public frmMain(string jsonPath) {
-            InitializeComponent();
-            _jsonPath = jsonPath;
-        }
-
-        private void frmMain_Load(object sender, EventArgs e) {
-            _airports = JsonSerializer.Deserialize<List<Airport>>(File.ReadAllText(_jsonPath));
-
-        }
-
-        private void cmdConnect_Click(object sender, EventArgs e) {
-            cmdConnect.Enabled = false;
-            tmrPoll.Enabled = true;
-
-            try {
-                _sim = new Microsoft.FlightSimulator.SimConnect.SimConnect(
-                    "SkyRunner", IntPtr.Zero, 0, null, 0);
-
-                _sim.OnRecvOpen += Sim_OnRecvOpen;
-                _sim.OnRecvQuit += Sim_OnRecvQuit;
-                _sim.OnRecvException += Sim_OnRecvException;
-                _sim.OnRecvSimobjectData += Sim_OnRecvSimobjectData;
-            }
-            catch (Exception ex) {
-                cmdConnect.Enabled = true;
-                MessageBox.Show(
-                    "Could not connect to MSFS. Is it running?\n\n" + ex.Message,
-                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void tmrPoll_Tick(object sender, EventArgs e) {
-            try { _sim?.ReceiveMessage(); } catch { }
         }
     }
 }
