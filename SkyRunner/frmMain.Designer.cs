@@ -41,6 +41,8 @@
             this.lblJobType = new System.Windows.Forms.Label();
             this.cmdTake = new System.Windows.Forms.Button();
             this.lblCurrentJob = new System.Windows.Forms.Label();
+            this.cmdJobDone = new System.Windows.Forms.Button();
+            this.lblJobSet = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.trkRadius)).BeginInit();
             this.SuspendLayout();
             // 
@@ -103,6 +105,7 @@
             this.lstAvailableJobs.Name = "lstAvailableJobs";
             this.lstAvailableJobs.Size = new System.Drawing.Size(776, 184);
             this.lstAvailableJobs.TabIndex = 5;
+            this.lstAvailableJobs.SelectedIndexChanged += new System.EventHandler(this.lstAvailableJobs_SelectedIndexChanged);
             // 
             // lblOriginIcao
             // 
@@ -191,11 +194,37 @@
             this.lblCurrentJob.TabIndex = 13;
             this.lblCurrentJob.Text = "Current Job:";
             // 
+            // cmdJobDone
+            // 
+            this.cmdJobDone.Enabled = false;
+            this.cmdJobDone.Location = new System.Drawing.Point(703, 371);
+            this.cmdJobDone.Name = "cmdJobDone";
+            this.cmdJobDone.Size = new System.Drawing.Size(85, 57);
+            this.cmdJobDone.TabIndex = 14;
+            this.cmdJobDone.Text = "Job done!";
+            this.cmdJobDone.UseVisualStyleBackColor = true;
+            // 
+            // lblJobSet
+            // 
+            this.lblJobSet.BackColor = System.Drawing.SystemColors.Highlight;
+            this.lblJobSet.Enabled = false;
+            this.lblJobSet.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblJobSet.ForeColor = System.Drawing.SystemColors.HighlightText;
+            this.lblJobSet.Location = new System.Drawing.Point(12, 215);
+            this.lblJobSet.Name = "lblJobSet";
+            this.lblJobSet.Size = new System.Drawing.Size(776, 20);
+            this.lblJobSet.TabIndex = 15;
+            this.lblJobSet.Text = "⚠ Job set. Pilot: Fly now and come back when the job is done ⚠";
+            this.lblJobSet.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.lblJobSet.Visible = false;
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Controls.Add(this.lblJobSet);
+            this.Controls.Add(this.cmdJobDone);
             this.Controls.Add(this.lblCurrentJob);
             this.Controls.Add(this.cmdTake);
             this.Controls.Add(this.lblPax);
@@ -210,9 +239,11 @@
             this.Controls.Add(this.txtCurrentAirport);
             this.Controls.Add(this.lblCurrentAirport);
             this.Controls.Add(this.cmdConnect);
+            this.KeyPreview = true;
             this.Name = "frmMain";
             this.Text = "SkyRunner";
             this.Load += new System.EventHandler(this.frmMain_Load);
+            this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.frmMain_KeyDown);
             ((System.ComponentModel.ISupportInitialize)(this.trkRadius)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -236,6 +267,8 @@
         private System.Windows.Forms.Label lblJobType;
         private System.Windows.Forms.Button cmdTake;
         private System.Windows.Forms.Label lblCurrentJob;
+        private System.Windows.Forms.Button cmdJobDone;
+        private System.Windows.Forms.Label lblJobSet;
     }
 }
 

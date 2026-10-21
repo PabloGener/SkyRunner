@@ -111,7 +111,10 @@ namespace SkyRunner
             currentJob = JsonSerializer.Deserialize<Job>(File.ReadAllText(path));
             if (currentJob != null && currentJob.Status == JobStatus.Current) {
                 UpdateCurrentJobLabels();
+
+                RefreshButtonStates();
             }
+
         }
 
         private void cmdConnect_Click(object sender, EventArgs e) {
@@ -243,9 +246,9 @@ namespace SkyRunner
                 _currentOriginIcao = nearestAirport.icao;
                 _currentLat = _acLat;
                 _currentLon = _acLon;
-                cmdGenerateJobs.Enabled = true;
             }
 
+            RefreshButtonStates();
             CleanupSim();
         }
 
@@ -261,9 +264,14 @@ namespace SkyRunner
 
             UpdateCurrentJobLabels();
             SaveCurrentJob();
+
+            RefreshButtonStates();
         }
 
         private void UpdateCurrentJobLabels() {
+            
+            bool jobActive = currentJob != null && currentJob.Status == JobStatus.Current;
+
             lblOriginIcao.Text = "Origin: " + currentJob.OriginIcao;
             lblDestination.Text = "Destination: " + currentJob.DestinationIcao + " (" + currentJob.DestinationName + ")";
             lblDistance.Text = "Distance: " + currentJob.DistanceNm.ToString("F0") + " nm";
@@ -271,6 +279,9 @@ namespace SkyRunner
             lblPax.Text = "Pax: " + currentJob.PassengerCount;
             lblWeight.Text = "Weight: " + currentJob.CargoWeightKg.ToString("F0") + " kg";
 
+            lstAvailableJobs.Enabled = !jobActive;
+            lblJobSet.Visible = jobActive;
+            lblCurrentJob.Enabled = true;
             lblOriginIcao.Enabled = true;
             lblDestination.Enabled = true;
             lblDistance.Enabled = true;
@@ -325,6 +336,10 @@ namespace SkyRunner
 
         }
 
+        private void lstAvailableJobs_SelectedIndexChanged(object sender, EventArgs e) {
+            RefreshButtonStates();
+        }
+
         private void Sim_OnRecvSimobjectData(SimConnect sender, SIMCONNECT_RECV_SIMOBJECT_DATA data) {
             switch ((REQUESTS)data.dwRequestID) {
                 case REQUESTS.Title: _acTitle = ((SimVarString)data.dwData[0]).Value; _gotTitle = true; break;
@@ -344,6 +359,8 @@ namespace SkyRunner
             CleanupSim();
         }
 
+        
+
         private static double DistanceInKilometers(
             double lat1, double lon1, double lat2, double lon2) {
             const double R = 6371.0;
@@ -359,6 +376,7 @@ namespace SkyRunner
 
         private void Sim_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data) {
             CleanupSim();
+            RefreshButtonStates();
         }
 
         private void Sim_OnRecvException(SimConnect sender, SIMCONNECT_RECV_EXCEPTION data) {
@@ -371,6 +389,27 @@ namespace SkyRunner
             try { _sim?.Dispose(); } catch { }
             _sim = null;
             cmdConnect.Enabled = true;
+        }
+
+        private void RefreshButtonStates() {
+            bool jobActive = currentJob != null && currentJob.Status == JobStatus.Current;
+
+            cmdConnect.Enabled = true;   // always available; see note below
+            cmdGenerateJobs.Enabled = !jobActive && _currentOriginIcao != null;
+            cmdTake.Enabled = !jobActive && lstAvailableJobs.SelectedItem is Job;
+            cmdJobDone.Enabled = jobActive;
+        }
+
+        private void frmMain_KeyDown(object sender, KeyEventArgs e) {
+            if (e.KeyCode == Keys.F3) {
+                string path = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "SkyRunner", "currentjob.json");
+
+                if (File.Exists(path)) File.Delete(path);
+
+                e.Handled = true;
+            }
         }
     }
 }
