@@ -33,6 +33,14 @@
             this.cmdGenerateJobs = new System.Windows.Forms.Button();
             this.trkRadius = new System.Windows.Forms.TrackBar();
             this.lstAvailableJobs = new System.Windows.Forms.ListBox();
+            this.lblOriginIcao = new System.Windows.Forms.Label();
+            this.lblDestination = new System.Windows.Forms.Label();
+            this.lblDistance = new System.Windows.Forms.Label();
+            this.lblPax = new System.Windows.Forms.Label();
+            this.lblWeight = new System.Windows.Forms.Label();
+            this.lblJobType = new System.Windows.Forms.Label();
+            this.cmdTake = new System.Windows.Forms.Button();
+            this.lblCurrentJob = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.trkRadius)).BeginInit();
             this.SuspendLayout();
             // 
@@ -96,11 +104,106 @@
             this.lstAvailableJobs.Size = new System.Drawing.Size(776, 184);
             this.lstAvailableJobs.TabIndex = 5;
             // 
+            // lblOriginIcao
+            // 
+            this.lblOriginIcao.AutoSize = true;
+            this.lblOriginIcao.Enabled = false;
+            this.lblOriginIcao.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblOriginIcao.Location = new System.Drawing.Point(8, 331);
+            this.lblOriginIcao.Name = "lblOriginIcao";
+            this.lblOriginIcao.Size = new System.Drawing.Size(54, 20);
+            this.lblOriginIcao.TabIndex = 6;
+            this.lblOriginIcao.Text = "Origin:";
+            // 
+            // lblDestination
+            // 
+            this.lblDestination.AutoSize = true;
+            this.lblDestination.Enabled = false;
+            this.lblDestination.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblDestination.Location = new System.Drawing.Point(8, 351);
+            this.lblDestination.Name = "lblDestination";
+            this.lblDestination.Size = new System.Drawing.Size(90, 20);
+            this.lblDestination.TabIndex = 7;
+            this.lblDestination.Text = "Destination";
+            // 
+            // lblDistance
+            // 
+            this.lblDistance.AutoSize = true;
+            this.lblDistance.Enabled = false;
+            this.lblDistance.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblDistance.Location = new System.Drawing.Point(8, 371);
+            this.lblDistance.Name = "lblDistance";
+            this.lblDistance.Size = new System.Drawing.Size(76, 20);
+            this.lblDistance.TabIndex = 8;
+            this.lblDistance.Text = "Distance:";
+            // 
+            // lblPax
+            // 
+            this.lblPax.AutoSize = true;
+            this.lblPax.Enabled = false;
+            this.lblPax.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblPax.Location = new System.Drawing.Point(391, 371);
+            this.lblPax.Name = "lblPax";
+            this.lblPax.Size = new System.Drawing.Size(39, 20);
+            this.lblPax.TabIndex = 11;
+            this.lblPax.Text = "Pax:";
+            // 
+            // lblWeight
+            // 
+            this.lblWeight.AutoSize = true;
+            this.lblWeight.Enabled = false;
+            this.lblWeight.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblWeight.Location = new System.Drawing.Point(391, 351);
+            this.lblWeight.Name = "lblWeight";
+            this.lblWeight.Size = new System.Drawing.Size(63, 20);
+            this.lblWeight.TabIndex = 10;
+            this.lblWeight.Text = "Weight:";
+            // 
+            // lblJobType
+            // 
+            this.lblJobType.AutoSize = true;
+            this.lblJobType.Enabled = false;
+            this.lblJobType.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblJobType.Location = new System.Drawing.Point(391, 331);
+            this.lblJobType.Name = "lblJobType";
+            this.lblJobType.Size = new System.Drawing.Size(47, 20);
+            this.lblJobType.TabIndex = 9;
+            this.lblJobType.Text = "Type:";
+            // 
+            // cmdTake
+            // 
+            this.cmdTake.Location = new System.Drawing.Point(703, 314);
+            this.cmdTake.Name = "cmdTake";
+            this.cmdTake.Size = new System.Drawing.Size(85, 57);
+            this.cmdTake.TabIndex = 12;
+            this.cmdTake.Text = "Take this job";
+            this.cmdTake.UseVisualStyleBackColor = true;
+            this.cmdTake.Click += new System.EventHandler(this.cmdTake_Click);
+            // 
+            // lblCurrentJob
+            // 
+            this.lblCurrentJob.AutoSize = true;
+            this.lblCurrentJob.Enabled = false;
+            this.lblCurrentJob.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.lblCurrentJob.Location = new System.Drawing.Point(8, 311);
+            this.lblCurrentJob.Name = "lblCurrentJob";
+            this.lblCurrentJob.Size = new System.Drawing.Size(96, 20);
+            this.lblCurrentJob.TabIndex = 13;
+            this.lblCurrentJob.Text = "Current Job:";
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
+            this.Controls.Add(this.lblCurrentJob);
+            this.Controls.Add(this.cmdTake);
+            this.Controls.Add(this.lblPax);
+            this.Controls.Add(this.lblWeight);
+            this.Controls.Add(this.lblJobType);
+            this.Controls.Add(this.lblDistance);
+            this.Controls.Add(this.lblDestination);
+            this.Controls.Add(this.lblOriginIcao);
             this.Controls.Add(this.lstAvailableJobs);
             this.Controls.Add(this.trkRadius);
             this.Controls.Add(this.cmdGenerateJobs);
@@ -125,6 +228,14 @@
         private System.Windows.Forms.Button cmdGenerateJobs;
         private System.Windows.Forms.TrackBar trkRadius;
         private System.Windows.Forms.ListBox lstAvailableJobs;
+        private System.Windows.Forms.Label lblOriginIcao;
+        private System.Windows.Forms.Label lblDestination;
+        private System.Windows.Forms.Label lblDistance;
+        private System.Windows.Forms.Label lblPax;
+        private System.Windows.Forms.Label lblWeight;
+        private System.Windows.Forms.Label lblJobType;
+        private System.Windows.Forms.Button cmdTake;
+        private System.Windows.Forms.Label lblCurrentJob;
     }
 }
 

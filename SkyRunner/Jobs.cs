@@ -29,7 +29,7 @@ namespace SkyRunner
         public DateTime CreatedUtc { get; set; }
         public DateTime? CompletedUtc { get; set; }
 
-        public string ToDisplayString() {
+        public override string ToString() {
             string payload = TaskType == JobTaskType.Passengers
                 ? $"{PassengerCount} pax"
                 : $"{CargoWeightKg:F0} kg";

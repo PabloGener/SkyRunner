@@ -76,6 +76,7 @@ namespace SkyRunner
         private List<Airport> closeby;
 
         private List<Job> available = new List<Job>();
+        private Job currentJob = new Job();
 
         public frmMain(string jsonPath) {
             InitializeComponent();
@@ -86,6 +87,9 @@ namespace SkyRunner
             _airports = JsonSerializer.Deserialize<List<Airport>>(File.ReadAllText(_jsonPath));
             Console.WriteLine($"Loaded {_airports.Count} airports. First: Icao='{_airports[0].icao}' Name='{_airports[0].name}' Lat={_airports[0].latitude} Lon={_airports[0].longitude}");
 
+
+            LoadCurrentJob();
+
             _msgHandler = new MessageHandler();
             _msgHandler.CreateControl();
             _msgHandler.MessageReceived += (s, m) =>
@@ -94,6 +98,20 @@ namespace SkyRunner
                     try { _sim.ReceiveMessage(); } catch { }
                 }
             };
+        }
+
+        private void LoadCurrentJob() {
+            string appFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SkyRunner");
+            string path = Path.Combine(appFolder, "currentjob.json");
+
+            if (!File.Exists(path)) return;
+
+            currentJob = JsonSerializer.Deserialize<Job>(File.ReadAllText(path));
+            if (currentJob != null && currentJob.Status == JobStatus.Current) {
+                UpdateCurrentJobLabels();
+            }
         }
 
         private void cmdConnect_Click(object sender, EventArgs e) {
@@ -164,7 +182,7 @@ namespace SkyRunner
 
             lstAvailableJobs.Items.Clear();
             foreach (Job job in available) {
-                lstAvailableJobs.Items.Add(job.ToDisplayString());
+                lstAvailableJobs.Items.Add(job);
             }
 
         }
@@ -231,6 +249,45 @@ namespace SkyRunner
             CleanupSim();
         }
 
+        private void cmdTake_Click(object sender, EventArgs e) {
+            if (!(lstAvailableJobs.SelectedItem is Job selectedJob)) {
+                MessageBox.Show("Select a job from the list first.",
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            currentJob = selectedJob;
+            currentJob.Status = JobStatus.Current;
+
+            UpdateCurrentJobLabels();
+            SaveCurrentJob();
+        }
+
+        private void UpdateCurrentJobLabels() {
+            lblOriginIcao.Text = "Origin: " + currentJob.OriginIcao;
+            lblDestination.Text = "Destination: " + currentJob.DestinationIcao + " (" + currentJob.DestinationName + ")";
+            lblDistance.Text = "Distance: " + currentJob.DistanceNm.ToString("F0") + " nm";
+            lblJobType.Text = "Type: " + currentJob.TaskType;
+            lblPax.Text = "Pax: " + currentJob.PassengerCount;
+            lblWeight.Text = "Weight: " + currentJob.CargoWeightKg.ToString("F0") + " kg";
+
+            lblOriginIcao.Enabled = true;
+            lblDestination.Enabled = true;
+            lblDistance.Enabled = true;
+            lblJobType.Enabled = true;
+            lblPax.Enabled = true;
+            lblWeight.Enabled = true;
+        }
+
+        private void SaveCurrentJob() {
+            string appFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SkyRunner");
+            string path = Path.Combine(appFolder, "currentjob.json");
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(path, JsonSerializer.Serialize(currentJob, options));
+        }
 
         private void Sim_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data) {
             _gotTitle = _gotLat = _gotLon = _gotGround = _gotParked = _gotSpeed = false;
