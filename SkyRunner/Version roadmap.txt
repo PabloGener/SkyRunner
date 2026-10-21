@@ -3,6 +3,8 @@ SkyRunner version rundown
 0.2	Poll working, next step: check in-main menu/in-cockpit
 0.3	Check in-cockpit -> if true: generate jobs from the current origin
 	0.31	Jobs come from haversine function within 50-500nm (user-adjustable).
+	0.32	Jobs details show up under the list
+	0.33	Create a 'current job' and a 'job history' with save to disk feature
 0.4	Job accepted -> wait for user to leave form then go silent -> upon form reactivation -> expect user to click 'job done'
 0.5	Upon user click 'job done' -> check if location/state is destination/parked, only then mark job done. destination becomes the next origin.
 0.6	History feature for done jobs (pay special attention to destinations in done jobs...)

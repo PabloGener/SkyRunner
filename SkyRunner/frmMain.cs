@@ -1,4 +1,7 @@
-﻿///////////////////////////////////////////////////////////////////////////////
+﻿// Uncomment the next line to use dummy data (no MSFS required)
+#define DUMMY_DATA
+
+///////////////////////////////////////////////////////////////////////////////
 // SimConnect integration patterns (per-primitive registration, SimVarString
 // wrapper, and message-handler pump) adapted from:
 //
@@ -23,6 +26,11 @@ namespace SkyRunner
 {
     public partial class frmMain : Form
     {
+        //////////////////////////////////////////////////////////////////////////////////
+        /// SimConnect stuff
+        /// 
+        //////////////////////////////////////////////////////////////////////////////////
+        
         [System.Runtime.InteropServices.StructLayout(
             System.Runtime.InteropServices.LayoutKind.Sequential,
             CharSet = System.Runtime.InteropServices.CharSet.Ansi, Pack = 1)]
@@ -33,7 +41,7 @@ namespace SkyRunner
             public string Value;
         }
 
-        private Microsoft.FlightSimulator.SimConnect.SimConnect _sim;
+        private SimConnect _sim;
         private MessageHandler _msgHandler;
 
         private const int WM_USER_SIMCONNECT = 0x0402;
@@ -49,7 +57,25 @@ namespace SkyRunner
         private bool _gotSpeed;
 
         private readonly string _jsonPath;
+
+        //////////////////////////////////////////////////////////////////////////////////
+        /// SimConnect stuff
+        /// 
+        //////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+        private string _currentOriginIcao;
+        private double _currentLat;
+        private double _currentLon;
+        
         private List<Airport> _airports;
+        
+        private List<Airport> closeby;
+
+        private List<Job> available = new List<Job>();
 
         public frmMain(string jsonPath) {
             InitializeComponent();
@@ -71,23 +97,140 @@ namespace SkyRunner
         }
 
         private void cmdConnect_Click(object sender, EventArgs e) {
-            cmdConnect.Enabled = false;
+#if DUMMY_DATA
+            _acTitle = "Dummy Cessna";
+            _acLat = -34.6763;
+            _acLon = -58.6428;
+            _acGround = 1;
+            _acParked = 1;
+            _acAirspeed = 0.0;
+            _gotTitle = _gotLat = _gotLon = _gotGround = _gotParked = _gotSpeed = true;
+            ProcessSnapshot();
+            #else
+                cmdConnect.Enabled = false;
 
-            try {
-                _sim = new SimConnect("SkyRunner", _msgHandler.Handle,
-                    WM_USER_SIMCONNECT, null, 0);
+                try {
+                    _sim = new SimConnect("SkyRunner", _msgHandler.Handle,
+                        WM_USER_SIMCONNECT, null, 0);
 
-                _sim.OnRecvOpen += Sim_OnRecvOpen;
-                _sim.OnRecvQuit += Sim_OnRecvQuit;
-                _sim.OnRecvException += Sim_OnRecvException;
-                _sim.OnRecvSimobjectData += Sim_OnRecvSimobjectData;
-            }
-            catch (Exception ex) {
-                cmdConnect.Enabled = true;
-                MessageBox.Show("Could not connect to MSFS. Is it running?\n\n" + ex.Message,
-                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+                    _sim.OnRecvOpen += Sim_OnRecvOpen;
+                    _sim.OnRecvQuit += Sim_OnRecvQuit;
+                    _sim.OnRecvException += Sim_OnRecvException;
+                    _sim.OnRecvSimobjectData += Sim_OnRecvSimobjectData;
+                }
+                catch (Exception ex) {
+                    cmdConnect.Enabled = true;
+                    MessageBox.Show("Could not connect to MSFS. Is it running?\n\n" + ex.Message,
+                        "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            #endif
         }
+
+        private void cmdGenerateJobs_Click(object sender, EventArgs e) {
+            double maxNm = trkRadius.Value;   // slider's current value, 50..500
+
+            closeby = FindClosestAirports(
+                _currentOriginIcao, _currentLat, _currentLon,
+                maxNm, maxCount: 10);
+
+
+            available.Clear();
+            var rng = new Random();
+
+            foreach (Airport airport in closeby) {
+                Job aJob = new Job();
+                aJob.OriginIcao = _currentOriginIcao;
+                aJob.DestinationIcao = airport.icao;
+                aJob.DestinationName = airport.name;
+                aJob.DistanceNm = DistanceInNauticalMiles(
+                                            _currentLat, _currentLon,
+                                            airport.latitude, airport.longitude);
+                aJob.Status = JobStatus.Available;
+                aJob.CreatedUtc = DateTime.UtcNow;
+
+                if (rng.Next(2) == 0) {
+                    aJob.TaskType = JobTaskType.Passengers;
+                    aJob.PassengerCount = 1 + rng.Next(40);
+                    aJob.CargoWeightKg = 0;
+                }
+                else {
+                    aJob.TaskType = JobTaskType.Cargo;
+                    aJob.PassengerCount = 0;
+                    aJob.CargoWeightKg = 100 + rng.Next(4901);
+                }
+
+                available.Add(aJob);
+            }
+
+            lstAvailableJobs.Items.Clear();
+            foreach (Job job in available) {
+                lstAvailableJobs.Items.Add(job.ToDisplayString());
+            }
+
+        }
+
+        private List<Airport> FindClosestAirports(
+            string originIcao, double originLat, double originLon,
+                double maxNm, int maxCount) {
+            
+            var candidates = new List<(Airport airport, double distanceNm)>();
+
+            foreach (var airport in _airports) {
+                if (airport.icao == originIcao) continue;
+                if (string.IsNullOrWhiteSpace(airport.icao)) continue;
+                if (string.IsNullOrWhiteSpace(airport.name)) continue;
+
+                double distanceNm = DistanceInNauticalMiles(
+                    originLat, originLon, airport.latitude, airport.longitude);
+
+                if (distanceNm <= 0 || distanceNm > maxNm) continue;
+
+                candidates.Add((airport, distanceNm));
+            }
+
+            return candidates
+                .OrderBy(c => c.distanceNm)
+                .Take(maxCount)
+                .Select(c => c.airport)
+                .ToList();
+        }
+
+        private static double DistanceInNauticalMiles(
+            double lat1, double lon1, double lat2, double lon2) {
+            
+            return DistanceInKilometers(lat1, lon1, lat2, lon2) / 1.852;
+        }
+
+        private void ProcessSnapshot() {
+            if (_acGround == 0) {
+                MessageBox.Show("Aircraft is airborne. Land first.",
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                CleanupSim();
+                return;
+            }
+
+            if (_acAirspeed >= 1.0) {
+                MessageBox.Show("Aircraft is on the ground but still moving. Come to a full stop and try again.",
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                CleanupSim();
+                return;
+            }
+
+            Airport nearestAirport = _airports
+                .OrderBy(a => DistanceInKilometers(_acLat, _acLon, a.latitude, a.longitude))
+                .FirstOrDefault();
+
+            if (nearestAirport != null) {
+                txtCurrentAirport.Text = $"[{nearestAirport.icao}] - {nearestAirport.name}";
+                _currentOriginIcao = nearestAirport.icao;
+                _currentLat = _acLat;
+                _currentLon = _acLon;
+                cmdGenerateJobs.Enabled = true;
+            }
+
+            CleanupSim();
+        }
+
 
         private void Sim_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data) {
             _gotTitle = _gotLat = _gotLon = _gotGround = _gotParked = _gotSpeed = false;
@@ -139,28 +282,7 @@ namespace SkyRunner
             if (!(_gotTitle && _gotLat && _gotLon && _gotGround && _gotParked && _gotSpeed))
                 return;
 
-            if (_acGround == 0) {
-                MessageBox.Show("Aircraft is airborne. Land first.",
-                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                CleanupSim();
-                return;
-            }
-
-            if (_acAirspeed >= 1.0) {
-                MessageBox.Show("Aircraft is on the ground but still moving. Come to a full stop and try again.",
-                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                CleanupSim();
-                return;
-            }
-
-            Airport nearestAirport = _airports
-                .OrderBy(a => DistanceInKilometers(_acLat, _acLon, a.latitude, a.longitude))
-                .FirstOrDefault();
-
-            if (nearestAirport != null) {
-                Console.WriteLine($"airport count={_airports.Count}, first icao='{_airports[0].icao}', name='{_airports[0].name}'");
-                txtCurrentAirport.Text = $"[{nearestAirport.icao}] - {nearestAirport.name}";
-            }
+            ProcessSnapshot();
 
             CleanupSim();
         }
