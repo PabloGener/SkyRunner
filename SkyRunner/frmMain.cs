@@ -77,7 +77,23 @@ namespace SkyRunner
 
         private List<Job> available = new List<Job>();
         private Job currentJob = new Job();
+        private List<Job> history = new List<Job>();
 
+        private string HistoryPath => Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    "SkyRunner", "history.json");
+
+        private string CurrentJobPath => Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    "SkyRunner", "currentjob.json");
+
+
+
+        ////////////////////////////////////////////////////////////////////////////////
+        /// Beginning of frmMain code
+        /// 
+        ///
+        ///////////////////////////////////////////////////////////////////////////////
         public frmMain(string jsonPath) {
             InitializeComponent();
             _jsonPath = jsonPath;
@@ -89,6 +105,7 @@ namespace SkyRunner
 
 
             LoadCurrentJob();
+            LoadHistory();
 
             _msgHandler = new MessageHandler();
             _msgHandler.CreateControl();
@@ -269,9 +286,6 @@ namespace SkyRunner
         }
 
         private void UpdateCurrentJobLabels() {
-            
-            bool jobActive = currentJob != null && currentJob.Status == JobStatus.Current;
-
             lblOriginIcao.Text = "Origin: " + currentJob.OriginIcao;
             lblDestination.Text = "Destination: " + currentJob.DestinationIcao + " (" + currentJob.DestinationName + ")";
             lblDistance.Text = "Distance: " + currentJob.DistanceNm.ToString("F0") + " nm";
@@ -279,15 +293,17 @@ namespace SkyRunner
             lblPax.Text = "Pax: " + currentJob.PassengerCount;
             lblWeight.Text = "Weight: " + currentJob.CargoWeightKg.ToString("F0") + " kg";
 
-            lstAvailableJobs.Enabled = !jobActive;
-            lblJobSet.Visible = jobActive;
-            lblCurrentJob.Enabled = true;
-            lblOriginIcao.Enabled = true;
-            lblDestination.Enabled = true;
-            lblDistance.Enabled = true;
-            lblJobType.Enabled = true;
-            lblPax.Enabled = true;
-            lblWeight.Enabled = true;
+            SetJobLabelsEnabled(true);
+        }
+
+        private void SetJobLabelsEnabled(bool enabled) {
+            lblCurrentJob.Enabled = enabled;
+            lblOriginIcao.Enabled = enabled;
+            lblDestination.Enabled = enabled;
+            lblDistance.Enabled = enabled;
+            lblJobType.Enabled = enabled;
+            lblPax.Enabled = enabled;
+            lblWeight.Enabled = enabled;
         }
 
         private void SaveCurrentJob() {
@@ -394,10 +410,13 @@ namespace SkyRunner
         private void RefreshButtonStates() {
             bool jobActive = currentJob != null && currentJob.Status == JobStatus.Current;
 
-            cmdConnect.Enabled = true;   // always available; see note below
+            cmdConnect.Enabled = true;
             cmdGenerateJobs.Enabled = !jobActive && _currentOriginIcao != null;
             cmdTake.Enabled = !jobActive && lstAvailableJobs.SelectedItem is Job;
             cmdJobDone.Enabled = jobActive;
+
+            lstAvailableJobs.Enabled = !jobActive;
+            lblJobSet.Visible = jobActive;
         }
 
         private void frmMain_KeyDown(object sender, KeyEventArgs e) {
@@ -411,5 +430,39 @@ namespace SkyRunner
                 e.Handled = true;
             }
         }
+
+        
+
+        private void SaveHistory() {
+            Directory.CreateDirectory(Path.GetDirectoryName(HistoryPath));
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(HistoryPath, JsonSerializer.Serialize(history, options));
+        }
+
+        private void LoadHistory() {
+            if (!File.Exists(HistoryPath)) return;
+
+            var loaded = JsonSerializer.Deserialize<List<Job>>(File.ReadAllText(HistoryPath));
+            if (loaded != null) history = loaded;
+        }
+
+        private void CompleteCurrentJob() {
+            if (currentJob == null || currentJob.Status != JobStatus.Current) return;
+
+            currentJob.Status = JobStatus.Done;
+            currentJob.CompletedUtc = DateTime.UtcNow;
+
+            history.Add(currentJob);
+            SaveHistory();
+
+            // Clear current job (in memory + on disk)
+            currentJob = new Job();
+            if (File.Exists(CurrentJobPath)) File.Delete(CurrentJobPath);
+
+            SetJobLabelsEnabled(false);
+            lblJobSet.Visible = false;
+            RefreshButtonStates();
+        }
+
     }
 }
