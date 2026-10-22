@@ -141,20 +141,10 @@ namespace SkyRunner
         }
 
         private void LoadCurrentJob() {
-            string appFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SkyRunner");
-            string path = Path.Combine(appFolder, "currentjob.json");
+            if (!File.Exists(CurrentJobPath)) return;
 
-            if (!File.Exists(path)) return;
-
-            currentJob = JsonSerializer.Deserialize<Job>(File.ReadAllText(path));
-            if (currentJob != null && currentJob.Status == JobStatus.Current) {
-                UpdateCurrentJobLabels();
-
-                RefreshButtonStates();
-            }
-
+            var loaded = JsonSerializer.Deserialize<Job>(File.ReadAllText(CurrentJobPath));
+            if (loaded != null) currentJob = loaded;
         }
 
         private void cmdConnect_Click(object sender, EventArgs e) {
@@ -382,13 +372,8 @@ namespace SkyRunner
         }
 
         private void SaveCurrentJob() {
-            string appFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SkyRunner");
-            string path = Path.Combine(appFolder, "currentjob.json");
-
             var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(path, JsonSerializer.Serialize(currentJob, options));
+            File.WriteAllText(CurrentJobPath, JsonSerializer.Serialize(currentJob, options));
         }
 
         private void Sim_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data) {
@@ -502,6 +487,11 @@ namespace SkyRunner
             StartPoll(PollMode.CurrentJobCheck);
         }
 
+        private void cmdJobDone_Click(object sender, EventArgs e) {
+            if (!_readyToComplete) return;
+            CompleteCurrentJob();
+        }
+
         private void CleanupSim() {
             try { _sim?.Dispose(); } catch { }
             _sim = null;
@@ -522,12 +512,7 @@ namespace SkyRunner
 
         private void frmMain_KeyDown(object sender, KeyEventArgs e) {
             if (e.KeyCode == Keys.F3) {
-                string path = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "SkyRunner", "currentjob.json");
-
-                if (File.Exists(path)) File.Delete(path);
-
+                if (File.Exists(CurrentJobPath)) File.Delete(CurrentJobPath);
                 e.Handled = true;
             }
         }
@@ -551,20 +536,26 @@ namespace SkyRunner
             if (currentJob == null || currentJob.Status != JobStatus.Current) return;
 
             tmrWatchMSFS.Stop();
+
             currentJob.Status = JobStatus.Done;
             currentJob.CompletedUtc = DateTime.UtcNow;
 
             history.Add(currentJob);
             SaveHistory();
 
-            // Clear current job (in memory + on disk)
             currentJob = new Job();
             if (File.Exists(CurrentJobPath)) File.Delete(CurrentJobPath);
 
+            _readyToComplete = false;
+            cmdJobDone.Text = "Job done!";
+
             SetJobLabelsEnabled(false);
             lblJobSet.Visible = false;
+
             RefreshButtonStates();
         }
+
+
 
     }
 }

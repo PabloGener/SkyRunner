@@ -205,6 +205,7 @@
             this.cmdJobDone.TabIndex = 14;
             this.cmdJobDone.Text = "Job done!";
             this.cmdJobDone.UseVisualStyleBackColor = true;
+            this.cmdJobDone.Click += new System.EventHandler(this.cmdJobDone_Click);
             // 
             // lblJobSet
             // 
