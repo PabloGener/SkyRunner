@@ -14,6 +14,20 @@
 // SimConnect layer small and dependency-free.
 ///////////////////////////////////////////////////////////////////////////////
 ///
+
+///////////////////////////////////////////////////////////////////////////////
+// Notification sound ("Airplane, Seatbelt Sign Beep") sourced from:
+//
+//   Kinoton
+//   https://freesound.org/people/Kinoton/sounds/670297/
+//   (CC0 — Public Domain)
+//
+// A clean recreation of the Airbus/Boeing seatbelt-sign chime. Used as
+// SkyRunner's ding-dong when the user switches back to MSFS mid-job.
+// No attribution required under CC0; credited here as courtesy.
+///////////////////////////////////////////////////////////////////////////////
+
+
 using System;
 using System.Collections.Generic;
 using System.IO;
