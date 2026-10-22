@@ -27,7 +27,6 @@
         private void InitializeComponent() {
             this.components = new System.ComponentModel.Container();
             this.cmdConnect = new System.Windows.Forms.Button();
-            this.tmrPoll = new System.Windows.Forms.Timer(this.components);
             this.lblCurrentAirport = new System.Windows.Forms.Label();
             this.txtCurrentAirport = new System.Windows.Forms.TextBox();
             this.cmdGenerateJobs = new System.Windows.Forms.Button();
@@ -43,6 +42,7 @@
             this.lblCurrentJob = new System.Windows.Forms.Label();
             this.cmdJobDone = new System.Windows.Forms.Button();
             this.lblJobSet = new System.Windows.Forms.Label();
+            this.tmrWatchMSFS = new System.Windows.Forms.Timer(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.trkRadius)).BeginInit();
             this.SuspendLayout();
             // 
@@ -76,6 +76,7 @@
             // 
             // cmdGenerateJobs
             // 
+            this.cmdGenerateJobs.Enabled = false;
             this.cmdGenerateJobs.Location = new System.Drawing.Point(12, 73);
             this.cmdGenerateJobs.Name = "cmdGenerateJobs";
             this.cmdGenerateJobs.Size = new System.Drawing.Size(85, 45);
@@ -175,6 +176,7 @@
             // 
             // cmdTake
             // 
+            this.cmdTake.Enabled = false;
             this.cmdTake.Location = new System.Drawing.Point(703, 314);
             this.cmdTake.Name = "cmdTake";
             this.cmdTake.Size = new System.Drawing.Size(85, 57);
@@ -218,6 +220,11 @@
             this.lblJobSet.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.lblJobSet.Visible = false;
             // 
+            // tmrWatchMSFS
+            // 
+            this.tmrWatchMSFS.Interval = 500;
+            this.tmrWatchMSFS.Tick += new System.EventHandler(this.tmrWatchMSFS_Tick);
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -242,6 +249,7 @@
             this.KeyPreview = true;
             this.Name = "frmMain";
             this.Text = "SkyRunner";
+            this.Activated += new System.EventHandler(this.frmMain_Activated);
             this.Load += new System.EventHandler(this.frmMain_Load);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.frmMain_KeyDown);
             ((System.ComponentModel.ISupportInitialize)(this.trkRadius)).EndInit();
@@ -253,7 +261,6 @@
         #endregion
 
         private System.Windows.Forms.Button cmdConnect;
-        private System.Windows.Forms.Timer tmrPoll;
         private System.Windows.Forms.Label lblCurrentAirport;
         private System.Windows.Forms.TextBox txtCurrentAirport;
         private System.Windows.Forms.Button cmdGenerateJobs;
@@ -269,6 +276,7 @@
         private System.Windows.Forms.Label lblCurrentJob;
         private System.Windows.Forms.Button cmdJobDone;
         private System.Windows.Forms.Label lblJobSet;
+        private System.Windows.Forms.Timer tmrWatchMSFS;
     }
 }
 

@@ -1,5 +1,5 @@
 ﻿// Uncomment the next line to use dummy data (no MSFS required)
-#define DUMMY_DATA
+//#define DUMMY_DATA
 
 ///////////////////////////////////////////////////////////////////////////////
 // SimConnect integration patterns (per-primitive registration, SimVarString
@@ -77,7 +77,11 @@ namespace SkyRunner
         /// 
         //////////////////////////////////////////////////////////////////////////////////
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
 
 
@@ -92,6 +96,11 @@ namespace SkyRunner
         private List<Job> available = new List<Job>();
         private Job currentJob = new Job();
         private List<Job> history = new List<Job>();
+
+
+        private enum PollMode { LocationOnly, CurrentJobCheck }
+        private PollMode _pollMode = PollMode.LocationOnly;
+        private bool _readyToComplete;
 
         private string HistoryPath => Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -150,6 +159,7 @@ namespace SkyRunner
 
         private void cmdConnect_Click(object sender, EventArgs e) {
 #if DUMMY_DATA
+            _pollMode = PollMode.LocationOnly;
             _acTitle = "Dummy Cessna";
             _acLat = -34.6763;
             _acLon = -58.6428;
@@ -158,25 +168,32 @@ namespace SkyRunner
             _acAirspeed = 0.0;
             _gotTitle = _gotLat = _gotLon = _gotGround = _gotParked = _gotSpeed = true;
             ProcessSnapshot();
-            #else
-                cmdConnect.Enabled = false;
-
-                try {
-                    _sim = new SimConnect("SkyRunner", _msgHandler.Handle,
-                        WM_USER_SIMCONNECT, null, 0);
-
-                    _sim.OnRecvOpen += Sim_OnRecvOpen;
-                    _sim.OnRecvQuit += Sim_OnRecvQuit;
-                    _sim.OnRecvException += Sim_OnRecvException;
-                    _sim.OnRecvSimobjectData += Sim_OnRecvSimobjectData;
-                }
-                catch (Exception ex) {
-                    cmdConnect.Enabled = true;
-                    MessageBox.Show("Could not connect to MSFS. Is it running?\n\n" + ex.Message,
-                        "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            #endif
+#else
+    cmdConnect.Enabled = false;
+    StartPoll(PollMode.LocationOnly);
+#endif
         }
+
+        private void StartPoll(PollMode mode) {
+            _pollMode = mode;
+
+            try {
+                _sim = new SimConnect("SkyRunner", _msgHandler.Handle,
+                    WM_USER_SIMCONNECT, null, 0);
+
+                _sim.OnRecvOpen += Sim_OnRecvOpen;
+                _sim.OnRecvQuit += Sim_OnRecvQuit;
+                _sim.OnRecvException += Sim_OnRecvException;
+                _sim.OnRecvSimobjectData += Sim_OnRecvSimobjectData;
+            }
+            catch (Exception ex) {
+                cmdConnect.Enabled = true;
+                MessageBox.Show("Could not connect to MSFS. Is it running?\n\n" + ex.Message,
+                    "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
 
         private void cmdGenerateJobs_Click(object sender, EventArgs e) {
             double maxNm = trkRadius.Value;   // slider's current value, 50..500
@@ -253,7 +270,46 @@ namespace SkyRunner
             return DistanceInKilometers(lat1, lon1, lat2, lon2) / 1.852;
         }
 
+
         private void ProcessSnapshot() {
+            if (_pollMode == PollMode.CurrentJobCheck) {
+                ProcessCurrentJobCheck();
+                return;
+            }
+
+            ProcessLocationOnly();
+        }
+
+        private void ProcessCurrentJobCheck() {
+            Airport nearest = _airports
+                .OrderBy(a => DistanceInKilometers(_acLat, _acLon, a.latitude, a.longitude))
+                .FirstOrDefault();
+
+            bool atDestination = nearest != null
+                && currentJob != null
+                && nearest.icao == currentJob.DestinationIcao;
+
+            bool stopped = _acGround == 1 && _acAirspeed < 1.0;
+
+            _readyToComplete = atDestination && stopped;
+
+            if (_readyToComplete) {
+                cmdJobDone.Text = "Job Done!";
+            }
+            else if (!atDestination) {
+                cmdJobDone.Text = "Not at " + (currentJob?.DestinationIcao ?? "destination");
+            }
+            else {
+                cmdJobDone.Text = "Stop the aircraft";
+            }
+
+            RefreshButtonStates();
+            CleanupSim();
+        }
+
+        private void ProcessLocationOnly() {
+            Console.WriteLine("ProcessSnapshot ran, _pollMode=" + _pollMode);
+
             if (_acGround == 0) {
                 MessageBox.Show("Aircraft is airborne. Land first.",
                     "SkyRunner", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -277,6 +333,8 @@ namespace SkyRunner
                 _currentOriginIcao = nearestAirport.icao;
                 _currentLat = _acLat;
                 _currentLon = _acLon;
+
+                cmdGenerateJobs.Enabled = true;
             }
 
             RefreshButtonStates();
@@ -297,6 +355,9 @@ namespace SkyRunner
             SaveCurrentJob();
 
             RefreshButtonStates();
+
+            tmrWatchMSFS.Start();
+
         }
 
         private void UpdateCurrentJobLabels() {
@@ -415,6 +476,32 @@ namespace SkyRunner
             CleanupSim();
         }
 
+        private void tmrWatchMSFS_Tick(object sender, EventArgs e) {
+            IntPtr hwnd = GetForegroundWindow();
+            GetWindowThreadProcessId(hwnd, out uint pid);
+
+            try {
+                var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+                if (proc.ProcessName.Equals("FlightSimulator", StringComparison.OrdinalIgnoreCase)) {
+                    PlayDingDong();
+                    tmrWatchMSFS.Stop();
+                }
+            }
+            catch { }
+        }
+
+        private void PlayDingDong() {
+            tmrWatchMSFS.Stop();
+            new System.Media.SoundPlayer(Properties.Resources.sign_beep).Play();
+        }
+
+        private void frmMain_Activated(object sender, EventArgs e) {
+            if (currentJob == null || currentJob.Status != JobStatus.Current) return;
+            if (_sim != null) return;   // a poll is already running, don't start another
+
+            StartPoll(PollMode.CurrentJobCheck);
+        }
+
         private void CleanupSim() {
             try { _sim?.Dispose(); } catch { }
             _sim = null;
@@ -427,7 +514,7 @@ namespace SkyRunner
             cmdConnect.Enabled = true;
             cmdGenerateJobs.Enabled = !jobActive && _currentOriginIcao != null;
             cmdTake.Enabled = !jobActive && lstAvailableJobs.SelectedItem is Job;
-            cmdJobDone.Enabled = jobActive;
+            cmdJobDone.Enabled = jobActive && _readyToComplete;
 
             lstAvailableJobs.Enabled = !jobActive;
             lblJobSet.Visible = jobActive;
@@ -463,6 +550,7 @@ namespace SkyRunner
         private void CompleteCurrentJob() {
             if (currentJob == null || currentJob.Status != JobStatus.Current) return;
 
+            tmrWatchMSFS.Stop();
             currentJob.Status = JobStatus.Done;
             currentJob.CompletedUtc = DateTime.UtcNow;
 
